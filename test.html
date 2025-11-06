@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英単語テスト</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            padding-top: 40px;
+        }
+
+        h1 { text-align: center; }
+
+        .container {
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        label { font-size: 18px; margin-right: 10px; }
+
+        input {
+            font-size: 16px;
+            padding: 5px;
+            margin: 10px;
+        }
+
+        button {
+            font-size: 18px;
+            padding: 10px 20px;
+            margin: 10px;
+            cursor: pointer;
+        }
+
+        #timer {
+            font-size: 24px;
+            font-weight: bold;
+            color: #d9534f;
+        }
+
+        #question, #answer, #result {
+            font-size: 18px;
+            margin-top: 20px;
+        }
+
+        #timerContainer {
+            margin-top: 20px;
+            font-size: 30px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #999;
+            padding: 8px 12px;
+        }
+
+        th {
+            background-color: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>英単語テスト</h1>
+
+    <div class="container">
+        <label for="startRange">開始番号:</label>
+        <input type="number" id="startRange" value="1" min="1"><br>
+
+        <label for="endRange">終了番号:</label>
+        <input type="number" id="endRange" value="75" min="1"><br>
+<label for="testTime">テスト時間（分）:</label>
+<input type="number" id="testTime" value="30" min="0" max="120"><br>
+
+        <button id="startButton">スタート</button>
+    </div>
+
+    <div id="timerContainer" style="display:none;">
+        <div id="timer">30:00</div>
+    </div>
+
+    <div id="question"></div>
+    <div id="answer"></div>
+    <div id="result"></div>
+
+<script>
+    let allWords = [];
+    let currentQuestionIndex = 0;
+    let correctAnswers = 0;
+    let testWords = [];
+    let timerInterval;
+    let timeRemaining = 0;
+    let userAnswers = [];
+
+    async function loadWords() {
+        try {
+            const response = await fetch('words.json');
+            const data = await response.json();
+            allWords = data;
+        } catch (error) {
+            alert("単語リストの読み込みに失敗しました。");
+        }
+    }
+
+function selectWordsInRange(start, end, numWords) {
+    const filteredWords = allWords.filter(word => word.id >= start && word.id <= end);
+
+    // 🟥 範囲に単語が1つもない場合 → 警告して中断
+    if (filteredWords.length === 0) {
+        alert("指定した範囲に単語がありません。");
+        return [];
+    }
+
+    // 🟢 範囲が30単語ぴったり → ランダムに20単語出題
+    if (filteredWords.length === 30) {
+        return shuffleArray(filteredWords).slice(0, 20);
+    }
+
+    // 🟢 範囲が30より多い → ランダムに30問出題
+    if (filteredWords.length > numWords) {
+        return shuffleArray(filteredWords).slice(0, numWords);
+    }
+
+    // 🟢 範囲が30未満 → 全部出題
+    return shuffleArray(filteredWords);
+}
+
+
+    function shuffleArray(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    }
+
+    
+    function updateTimer() {
+        let minutes = Math.floor(timeRemaining / 60);
+        let seconds = timeRemaining % 60;
+        if (seconds < 10) seconds = '0' + seconds;
+        document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+        timeRemaining--;
+
+        if (timeRemaining < 0) {
+            clearInterval(timerInterval);
+            playBeepSound(); // ← ここで「ピピピ」鳴る！
+            alert('時間になりました！テストを開始します。');
+            startTest();
+        }
+    }
+
+    // 🔔 「ピピピ」と3回鳴らす関数（updateTimerの外に配置！）
+   // 🔔 「ピピピ」を3回繰り返す（合計9音）
+function playBeepSound() {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const singleBeepDuration = 0.1;  // 1回の「ピ」の長さ
+    const innerGap = 0.08;           // 「ピピピ」の中の間隔
+    const groupGap = 0.6;            // 「ピピピ」セット間の間隔
+    const frequency = 900;           // 音の高さ（Hz）
+    const groupCount = 3;            // 「ピピピ」を3回繰り返す
+
+    let timeOffset = 0;
+
+    for (let g = 0; g < groupCount; g++) {
+        for (let i = 0; i < 3; i++) {  // 各グループ内の「ピピピ」
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+
+            const startTime = audioCtx.currentTime + timeOffset;
+            const stopTime = startTime + singleBeepDuration;
+
+            gainNode.gain.setValueAtTime(0.2, startTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, stopTime);
+
+            oscillator.start(startTime);
+            oscillator.stop(stopTime);
+
+            // 次の「ピ」までの間隔
+            timeOffset += singleBeepDuration + innerGap;
+        }
+
+        // 次の「ピピピ」までの間隔
+        timeOffset += groupGap;
+    }
+}
+
+
+    function startTest() {
+        currentQuestionIndex = 0;
+        correctAnswers = 0;
+        userAnswers = [];
+        showQuestion(testWords[currentQuestionIndex]);
+    }
+
+    function showQuestion(word) {
+    // 日本語の「、」「;」「；」を「・」に変換して表示
+    const jpText = word.jp.replace(/[、;；]/g, '・');
+    document.getElementById('question').textContent = `日本語: ${jpText}`;
+    document.getElementById('answer').innerHTML = `
+        英語: <input type="text" id="userAnswer" placeholder="英語の答えを入力">
+        <br>カタカナ: <input type="text" id="userKatakanaAnswer" placeholder="カタカナの答えを入力">
+        <button onclick="checkAnswer()">答える</button>`;
+}
+
+
+  function checkAnswer() {
+    // 現在の問題が存在するか安全確認
+    if (!testWords || !testWords[currentQuestionIndex]) return;
+
+    const word = testWords[currentQuestionIndex];
+    const userAnswer = document.getElementById('userAnswer').value.trim();
+    const userKatakanaAnswer = document.getElementById('userKatakanaAnswer').value.trim();
+
+    userAnswers.push({
+        jp: word.jp,
+        correct: word.en,
+        user: userAnswer,
+        katakana: userKatakanaAnswer
+    });
+
+    if (userAnswer.toLowerCase() === word.en.toLowerCase()) {
+        correctAnswers++;
+    }
+
+    currentQuestionIndex++;
+
+    // 出題数（testWords.length）に合わせて終了判定
+    if (currentQuestionIndex < testWords.length) {
+        showQuestion(testWords[currentQuestionIndex]);
+    } else {
+        showResults();
+    }
+}
+
+    
+
+ function showResults() {
+    document.getElementById('question').style.display = 'none';
+    document.getElementById('answer').style.display = 'none';
+
+    // 出題数に合わせて正解数を表示
+    let resultHTML = `<h2>テスト終了！</h2><p>正解数: ${correctAnswers} / ${testWords.length}</p>`;
+    resultHTML += `<table>
+        <tr><th>日本語</th><th>正解（英語）</th><th>あなたの答え</th><th>カタカナ</th></tr>`;
+
+    userAnswers.forEach(a => {
+        const isCorrect = a.user.toLowerCase() === a.correct.toLowerCase();
+        // 日本語の「、」「;」「；」を「・」に変換
+        const jpText = a.jp.replace(/[、;；]/g, '・');
+        resultHTML += `
+            <tr style="background-color:${isCorrect ? '#c8e6c9' : '#ffcdd2'}">
+                <td>${jpText}</td>
+                <td>${a.correct}</td>
+                <td>${a.user}</td>
+                <td>${a.katakana}</td>
+            </tr>`;
+    });
+
+    resultHTML += `</table>`;
+    document.getElementById('result').innerHTML = resultHTML;
+}
+
+
+
+    document.getElementById('startButton').addEventListener('click', async function() {
+    await loadWords();
+
+    const startRange = parseInt(document.getElementById('startRange').value, 10);
+    const endRange = parseInt(document.getElementById('endRange').value, 10);
+    const numWords = 30;
+
+    // 🟢 追加：ユーザーが入力したテスト時間（分）を取得
+    const testTimeMinutes = parseInt(document.getElementById('testTime').value, 10);
+    if (isNaN(testTimeMinutes) || testTimeMinutes < 0) {
+        alert('テスト時間を正しく入力してください。');
+        return;
+    }
+
+    testWords = selectWordsInRange(startRange, endRange, numWords);
+    if (testWords.length > 0) {
+        document.getElementById('startButton').style.display = 'none';
+        document.getElementById('timerContainer').style.display = 'block';
+
+        // 🟢 入力したテスト時間を反映（分 → 秒）
+        timeRemaining = testTimeMinutes * 60;
+       
+        // 🟢 スタート直後に正しい残り時間を表示
+        let minutes = Math.floor(timeRemaining / 60);
+        let seconds = timeRemaining % 60;
+        if (seconds < 10) seconds = '0' + seconds;
+        document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+
+        timerInterval = setInterval(updateTimer, 1000);
+        updateTimer();
+    }
+});
+
+</script>
