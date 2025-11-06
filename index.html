@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アイディア置き場</title>
+  <style>
+    body {
+      font-family:"Segoe UI",sans-serif;
+      background:#121629;
+      color:#fff;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      height:100vh;
+      margin:0;
+    }
+    h1 { color:#ffd6dd; margin-bottom:40px; text-align:center; }
+    .button-container {
+      display:flex;
+      gap:40px;
+      flex-wrap:wrap;
+      justify-content:center;
+    }
+    .game-button {
+      padding:20px 40px;
+      font-size:1.5em;
+      background-color:#eebbc3;
+      color:#232946;
+      border:none;
+      border-radius:12px;
+      cursor:pointer;
+      transition:0.2s;
+    }
+    .game-button:hover { background-color:#ffd6dd; }
+  </style>
+</head>
+<body>
+
+  <h1>アイディア置き場</h1>
+
+  <div class="button-container">
+    <button class="game-button" onclick="location.href='hayauchi.html'">早打ち単語ゲーム</button>
+    <button class="game-button" onclick="location.href='test.html'">英単語テスト</button>
+  </div>
+
+</body>
+</html>
