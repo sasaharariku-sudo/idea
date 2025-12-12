@@ -174,6 +174,48 @@
       color: #ffe66d;
       text-shadow: 0 0 8px #ffe66d;
     }
+
+    /* ------- ポモドーロタイマー用（追加スタイル） ------- */
+    #pomodoro-timer {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 220px;
+        background-color: rgba(20,22,38,0.95);
+        color: #fff;
+        border: 2px solid #eebbc3;
+        border-radius: 14px;
+        padding: 12px;
+        text-align: center;
+        font-family: "Segoe UI", sans-serif;
+        z-index: 9999;
+        cursor: move;
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.45);
+    }
+    #pomodoro-time {
+        font-size: 1.8em;
+        font-weight: 600;
+        margin-top: 4px;
+    }
+    #pomodoro-label {
+        font-size: 0.9em;
+        margin-top: 2px;
+        opacity: 0.8;
+    }
+    #pomodoro-timer button {
+        font-size: 0.95em;
+        margin: 3px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: none;
+        background: #eebbc3;
+        color: #232946;
+        cursor: pointer;
+        transition: 0.15s;
+    }
+    #pomodoro-timer button:hover {
+        background: #ffd6dd;
+    }
   </style>
 </head>
 <body>
@@ -202,7 +244,224 @@
     </div>
   </div>
 
+  <!-- ===== ポモドーロタイマー（ここだけ追加） ===== -->
+ <div id="pomodoro-timer">
+  <div style="font-size:1em; margin-bottom:5px;">ポモドーロタイマー</div>
+  <div id="pomodoro-time" style="font-size:1.8em;">25:00</div>
+  <div id="pomodoro-label" style="font-size:0.9em; margin-top:3px;">作業</div>
+  <button id="pomodoro-start">開始</button>
+  <button id="pomodoro-stop">停止</button>
+  <button id="pomodoro-reset">リセット</button>
+</div>
+
+  <!-- ===== ここから既存ゲームのスクリプト（元のまま） ===== -->
   <script>
+    /* ========== ここにポモドーロの同期スクリプトを追加します（ゲームスクリプトをいっさい変えない） ========== */
+
+    (function(){
+      // 独立したブロックでタイマー処理を追加（ゲームコードは下にそのまま続きます）
+      const timerEl = document.getElementById('pomodoro-timer');
+      const timeEl = document.getElementById('pomodoro-time');
+      const labelEl = document.getElementById('pomodoro-label');
+      const startBtnP = document.getElementById('pomodoro-start');
+      const stopBtnP = document.getElementById('pomodoro-stop');
+      const resetBtnP = document.getElementById('pomodoro-reset');
+
+      const times = [25, 5, 25, 5]; // 分
+      const labels = ["作業", "休憩", "作業", "休憩"];
+
+      // state を localStorage から復元（数値チェックを行う）
+      let index = parseInt(localStorage.getItem('pomodoroIndex'));
+      if (Number.isNaN(index)) index = 0;
+
+      let seconds = parseInt(localStorage.getItem('pomodoroSeconds'));
+      if (Number.isNaN(seconds)) seconds = times[index] * 60;
+
+      let interval = null;
+
+      // ビープ音（短く3回）
+      function playBeep() {
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const duration = 0.08;
+          const gap = 0.06;
+          const freq = 900;
+          let offset = 0;
+          for (let g = 0; g < 3; g++) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime + offset);
+            gain.gain.setValueAtTime(0.18, audioCtx.currentTime + offset);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + offset + duration);
+            osc.start(audioCtx.currentTime + offset);
+            osc.stop(audioCtx.currentTime + offset + duration);
+            offset += duration + gap;
+          }
+        } catch (e) {
+          // audioCtx が使えない環境では無視
+        }
+      }
+
+      function updateDisplay() {
+        let m = Math.floor(seconds / 60);
+        let s = seconds % 60;
+        if (s < 10) s = '0' + s;
+        timeEl.textContent = `${m}:${s}`;
+        labelEl.textContent = labels[index];
+      }
+
+      function tick() {
+        if (seconds <= 0) {
+          playBeep();
+          index = (index + 1) % times.length;
+          seconds = times[index] * 60;
+          localStorage.setItem('pomodoroIndex', String(index));
+        } else {
+          seconds--;
+        }
+        localStorage.setItem('pomodoroSeconds', String(seconds));
+        updateDisplay();
+      }
+
+      startBtnP.addEventListener('click', () => {
+        if (!interval) {
+          interval = setInterval(tick, 1000);
+          localStorage.setItem('pomodoroRunning', 'true');
+        }
+      });
+
+      stopBtnP.addEventListener('click', () => {
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
+          localStorage.setItem('pomodoroRunning', 'false');
+        }
+      });
+
+      resetBtnP.addEventListener('click', () => {
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+        index = 0;
+        seconds = times[index] * 60;
+        localStorage.setItem('pomodoroSeconds', String(seconds));
+        localStorage.setItem('pomodoroIndex', String(index));
+        localStorage.setItem('pomodoroRunning', 'false');
+        updateDisplay();
+      });
+
+      // ページ読み込み時の自動開始（前回 running だったら）
+      updateDisplay();
+      if (localStorage.getItem('pomodoroRunning') === 'true' && !interval) {
+        interval = setInterval(tick, 1000);
+      }
+
+      // storage イベントで他タブ・他ページと同期
+      window.addEventListener('storage', (e) => {
+        if (!e.key) return;
+        if (e.key === 'pomodoroSeconds' || e.key === 'pomodoroIndex' || e.key === 'pomodoroRunning') {
+          // 再読み込み
+          const newIndex = parseInt(localStorage.getItem('pomodoroIndex'));
+          if (!Number.isNaN(newIndex)) index = newIndex;
+          const newSeconds = parseInt(localStorage.getItem('pomodoroSeconds'));
+          if (!Number.isNaN(newSeconds)) seconds = newSeconds;
+          updateDisplay();
+          const running = localStorage.getItem('pomodoroRunning') === 'true';
+          if (running && !interval) {
+            interval = setInterval(tick, 1000);
+          } else if (!running && interval) {
+            clearInterval(interval);
+            interval = null;
+          }
+        }
+        // 位置同期
+        if (e.key === 'pomodoroLeft' || e.key === 'pomodoroTop' || e.key === 'pomodoroRight') {
+          // 優先的に left があれば使う。なければ right を使う。
+          const left = localStorage.getItem('pomodoroLeft');
+          const top = localStorage.getItem('pomodoroTop');
+          const right = localStorage.getItem('pomodoroRight');
+          if (left) {
+            timerEl.style.left = left;
+            timerEl.style.right = '';
+          } else if (right) {
+            timerEl.style.right = right;
+            timerEl.style.left = '';
+          }
+          if (top) timerEl.style.top = top;
+        }
+      });
+
+      // ---------------- ドラッグ移動（右上初期を維持しつつ移動は left を使う） ----------------
+      // 初期位置の読み込み：left優先, なければright, なければ right:10px/top:50px
+      (function restorePosition(){
+        const savedLeft = localStorage.getItem('pomodoroLeft');
+        const savedTop = localStorage.getItem('pomodoroTop');
+        const savedRight = localStorage.getItem('pomodoroRight');
+        if (savedLeft) {
+          timerEl.style.left = savedLeft;
+          timerEl.style.right = '';
+        } else if (savedRight) {
+          timerEl.style.right = savedRight;
+          timerEl.style.left = '';
+        } else {
+          // デフォルトは右上（他ページに合わせる）
+          timerEl.style.right = '10px';
+          timerEl.style.top = '50px';
+        }
+        if (savedTop) timerEl.style.top = savedTop;
+      })();
+
+      let isDragging = false;
+      let dragOffsetX = 0;
+      let dragOffsetY = 0;
+
+      timerEl.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        // getBoundingClientRect を使って左位置を取得
+        const rect = timerEl.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        // 切り替え： right が設定されている場合はクリアして left に切り替える
+        timerEl.style.right = '';
+        timerEl.style.left = rect.left + 'px';
+        timerEl.style.cursor = 'grabbing';
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const newLeft = e.clientX - dragOffsetX;
+        const newTop = e.clientY - dragOffsetY;
+        timerEl.style.left = Math.max(0, newLeft) + 'px';
+        timerEl.style.top = Math.max(0, newTop) + 'px';
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        timerEl.style.cursor = 'grab';
+        // 位置を保存：left と top、そして右も計算して保存（他ページが right を使う可能性があるため）
+        const leftPx = timerEl.style.left || '';
+        const topPx = timerEl.style.top || '';
+        localStorage.setItem('pomodoroLeft', leftPx);
+        localStorage.setItem('pomodoroTop', topPx);
+        // 右はウィンドウ幅から計算して保存（"10px" のような単位文字列で保存）
+        try {
+          const rect = timerEl.getBoundingClientRect();
+          const rightValue = (window.innerWidth - rect.left - rect.width);
+          localStorage.setItem('pomodoroRight', rightValue + 'px');
+        } catch (e) {
+          // ignore
+        }
+      });
+
+    })();
+
+    /* ========== 以下は元のゲームスクリプト（変更なし） ========== */
+
     const startScreen = document.getElementById('start-screen');
     const startBtn = document.getElementById('startBtn');
     const game = document.getElementById('game');
