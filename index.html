@@ -107,8 +107,8 @@ const startBtn = document.getElementById('pomodoro-start');
 const stopBtn = document.getElementById('pomodoro-stop');
 const resetBtn = document.getElementById('pomodoro-reset');
 
-const times = [25,5,25,5];
-const labels = ["作業","休憩","作業","休憩"];
+const times = [5,25,5,25];
+const labels = ["休憩","作業","休憩","作業"];
 let index = parseInt(localStorage.getItem('pomodoroIndex')) || 0;
 let seconds = parseInt(localStorage.getItem('pomodoroSeconds')) || times[index]*60;
 let interval = null;
@@ -216,3 +216,4 @@ if(savedTop) timerEl.style.top = savedTop;
 
 </body>
 </html>
+
